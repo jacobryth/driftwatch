@@ -1,26 +1,26 @@
 # driftwatch example configuration
-# Copy to driftwatch.yaml and adjust for your environment.
 
 # How often to poll watched paths for changes.
 poll_interval: 30s
 
-# Directories or files to monitor.
-watch:
+# Log verbosity: debug | info | warn | error
+log_level: info
+
+# One or more targets to monitor.
+watch_targets:
   - path: /etc/nginx
-    recurse: true
-    excludes:
-      - "*.bak"
-      - "*.swp"
+    glob: "*.conf"
+    recursive: true
+    exclude:
+      - "/etc/nginx/cache"
 
-  - path: /etc/ssh/sshd_config
-    recurse: false
+  - path: /etc/app
+    glob: "*.yaml"
+    recursive: false
 
-  - path: /etc/cron.d
-    recurse: false
-
-# Logging configuration.
-log:
-  # Minimum log level: debug | info | warn | error
-  level: info
-  # Output format: text | json
-  format: json
+# Optional webhook alerting.
+webhook:
+  enabled: false
+  endpoint: "https://hooks.example.com/driftwatch"
+  # HTTP timeout for webhook POST requests.
+  timeout: 10s

@@ -1,90 +1,88 @@
-package config
+package config_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/yourusername/driftwatch/internal/config"
 )
 
 func writeTmpConfig(t *testing.T, content string) string {
 	t.Helper()
-	dir := t.TempDir()
-	p := filepath.Join(dir, "driftwatch.yaml")
-	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-		t.Fatalf("writeTmpConfig: %v", err)
+	f, err := os.CreateTemp(t.TempDir(), "driftwatch-*.yaml")
+	if err != nil {
+		t.Fatalf("create temp config: %v", err)
 	}
-	return p
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatalf("write temp config: %v", err)
+	}
+	f.Close()
+	return f.Name()
 }
 
 func TestLoad_Defaults(t *testing.T) {
-	p := writeTmpConfig(t, "watch:\n  - path: /etc/app\n")
-	cfg, err := Load(p)
+	path := writeTmpConfig(t, "watch_targets:\n  - path: /etc/app\n")
+	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.PollInterval != 30*time.Second {
-		t.Errorf("default poll_interval: got %v, want 30s", cfg.PollInterval)
+		t.Errorf("poll_interval: want 30s, got %v", cfg.PollInterval)
 	}
-	if cfg.Log.Format != "text" {
-		t.Errorf("default log.format: got %q, want \"text\"", cfg.Log.Format)
+	if cfg.LogLevel != "info" {
+		t.Errorf("log_level: want info, got %s", cfg.LogLevel)
 	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
-	p := writeTmpConfig(t, `
-poll_interval: 10s
-watch:
-  - path: /etc/nginx
-    recurse: true
-    excludes:
-      - "*.bak"
-log:
-  level: debug
-  format: json
-`)
-	cfg, err := Load(p)
+	path := writeTmpConfig(t, "poll_interval: 10s\nlog_level: debug\nwatch_targets:\n  - path: /tmp\n")
+	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.PollInterval != 10*time.Second {
-		t.Errorf("poll_interval: got %v, want 10s", cfg.PollInterval)
+		t.Errorf("poll_interval: want 10s, got %v", cfg.PollInterval)
 	}
-	if !cfg.Watch[0].Recurse {
-		t.Error("expected recurse=true")
-	}
-	if cfg.Log.Format != "json" {
-		t.Errorf("log.format: got %q, want \"json\"", cfg.Log.Format)
+	if cfg.LogLevel != "debug" {
+		t.Errorf("log_level: want debug, got %s", cfg.LogLevel)
 	}
 }
 
 func TestLoad_MissingFile(t *testing.T) {
-	_, err := Load("/nonexistent/path/driftwatch.yaml")
+	_, err := config.Load(filepath.Join(t.TempDir(), "nonexistent.yaml"))
 	if err == nil {
 		t.Fatal("expected error for missing file")
 	}
 }
 
 func TestLoad_NoWatchTargets(t *testing.T) {
-	p := writeTmpConfig(t, "poll_interval: 5s\n")
-	_, err := Load(p)
+	path := writeTmpConfig(t, "poll_interval: 5s\n")
+	_, err := config.Load(path)
 	if err == nil {
-		t.Fatal("expected validation error for empty watch list")
+		t.Fatal("expected error when no watch_targets defined")
 	}
 }
 
-func TestLoad_InvalidLogFormat(t *testing.T) {
-	p := writeTmpConfig(t, "watch:\n  - path: /etc\nlog:\n  format: xml\n")
-	_, err := Load(p)
+func TestLoad_WebhookMissingEndpoint(t *testing.T) {
+	path := writeTmpConfig(t, "watch_targets:\n  - path: /etc\nwebhook:\n  enabled: true\n")
+	_, err := config.Load(path)
 	if err == nil {
-		t.Fatal("expected validation error for invalid log format")
+		t.Fatal("expected error when webhook enabled but endpoint missing")
 	}
 }
 
-func TestLoad_EmptyWatchPath(t *testing.T) {
-	p := writeTmpConfig(t, "watch:\n  - path: \"\"\n")
-	_, err := Load(p)
-	if err == nil {
-		t.Fatal("expected validation error for empty watch path")
+func TestLoad_WebhookValid(t *testing.T) {
+	path := writeTmpConfig(t, "watch_targets:\n  - path: /etc\nwebhook:\n  enabled: true\n  endpoint: http://localhost:9000/hook\n  timeout: 5s\n")
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Webhook.Enabled {
+		t.Error("expected webhook to be enabled")
+	}
+	if cfg.Webhook.Timeout != 5*time.Second {
+		t.Errorf("webhook timeout: want 5s, got %v", cfg.Webhook.Timeout)
 	}
 }

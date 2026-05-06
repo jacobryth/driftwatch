@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -8,69 +9,66 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds the top-level driftwatch configuration.
-type Config struct {
-	PollInterval time.Duration `yaml:"poll_interval"`
-	Watch        []WatchTarget  `yaml:"watch"`
-	Log          LogConfig      `yaml:"log"`
-}
-
 // WatchTarget describes a single directory or file to monitor.
 type WatchTarget struct {
-	Path     string   `yaml:"path"`
-	Recurse  bool     `yaml:"recurse"`
-	Excludes []string `yaml:"excludes"`
+	Path        string   `yaml:"path"`
+	Glob        string   `yaml:"glob"`
+	Exclude     []string `yaml:"exclude"`
+	Recursive   bool     `yaml:"recursive"`
 }
 
-// LogConfig controls structured log output.
-type LogConfig struct {
-	Level  string `yaml:"level"`
-	Format string `yaml:"format"` // "json" or "text"
+// WebhookConfig holds optional webhook alerting settings.
+type WebhookConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Endpoint string        `yaml:"endpoint"`
+	Timeout  time.Duration `yaml:"timeout"`
 }
 
-// Load reads and validates a YAML config file at the given path.
-func Load(path string) (*Config, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("config: open %q: %w", path, err)
-	}
-	defer f.Close()
+// Config is the top-level configuration for driftwatch.
+type Config struct {
+	PollInterval time.Duration  `yaml:"poll_interval"`
+	LogLevel     string         `yaml:"log_level"`
+	WatchTargets []WatchTarget  `yaml:"watch_targets"`
+	Webhook      WebhookConfig  `yaml:"webhook"`
+}
 
-	cfg := &Config{
+func defaults() Config {
+	return Config{
 		PollInterval: 30 * time.Second,
-		Log: LogConfig{
-			Level:  "info",
-			Format: "text",
+		LogLevel:     "info",
+		Webhook: WebhookConfig{
+			Timeout: 10 * time.Second,
 		},
 	}
-
-	if err := yaml.NewDecoder(f).Decode(cfg); err != nil {
-		return nil, fmt.Errorf("config: decode %q: %w", path, err)
-	}
-
-	if err := cfg.validate(); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
 }
 
-func (c *Config) validate() error {
-	if c.PollInterval <= 0 {
-		return fmt.Errorf("config: poll_interval must be positive")
-	}
-	if len(c.Watch) == 0 {
-		return fmt.Errorf("config: at least one watch target is required")
-	}
-	for i, t := range c.Watch {
-		if t.Path == "" {
-			return fmt.Errorf("config: watch[%d]: path must not be empty", i)
+// Load reads a YAML config file from path and applies defaults.
+func Load(path string) (*Config, error) {
+	cfg := defaults()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("config file not found: %s", path)
 		}
+		return nil, fmt.Errorf("read config: %w", err)
 	}
-	switch c.Log.Format {
-	case "json", "text":
-	default:
-		return fmt.Errorf("config: log.format must be \"json\" or \"text\", got %q", c.Log.Format)
+
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
 	}
-	return nil
+
+	if len(cfg.WatchTargets) == 0 {
+		return nil, errors.New("config: at least one watch_target must be defined")
+	}
+
+	if cfg.Webhook.Enabled && cfg.Webhook.Endpoint == "" {
+		return nil, errors.New("config: webhook.endpoint must be set when webhook is enabled")
+	}
+
+	if cfg.Webhook.Timeout == 0 {
+		cfg.Webhook.Timeout = 10 * time.Second
+	}
+
+	return &cfg, nil
 }
