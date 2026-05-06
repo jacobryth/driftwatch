@@ -28,3 +28,8 @@ func (m *MultiHandler) Handle(a Alert) error {
 func (m *MultiHandler) Add(h Handler) {
 	m.handlers = append(m.handlers, h)
 }
+
+// Len returns the number of handlers registered with the MultiHandler.
+func (m *MultiHandler) Len() int {
+	return len(m.handlers)
+}
