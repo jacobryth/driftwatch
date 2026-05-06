@@ -1,0 +1,26 @@
+# driftwatch example configuration
+# Copy to driftwatch.yaml and adjust for your environment.
+
+# How often to poll watched paths for changes.
+poll_interval: 30s
+
+# Directories or files to monitor.
+watch:
+  - path: /etc/nginx
+    recurse: true
+    excludes:
+      - "*.bak"
+      - "*.swp"
+
+  - path: /etc/ssh/sshd_config
+    recurse: false
+
+  - path: /etc/cron.d
+    recurse: false
+
+# Logging configuration.
+log:
+  # Minimum log level: debug | info | warn | error
+  level: info
+  # Output format: text | json
+  format: json
