@@ -24,14 +24,17 @@ func NewDispatcher(events <-chan watcher.Event, handler Handler, logger *log.Log
 	}
 }
 
-// Run blocks, processing events until ctx is cancelled.
+// Run blocks, processing events until ctx is cancelled or the events
+// channel is closed. It logs a message when it stops processing.
 func (d *Dispatcher) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			d.logf("dispatcher stopping: context cancelled: %v", ctx.Err())
 			return
 		case e, ok := <-d.events:
 			if !ok {
+				d.logf("dispatcher stopping: events channel closed")
 				return
 			}
 			d.dispatch(e)
@@ -42,8 +45,13 @@ func (d *Dispatcher) Run(ctx context.Context) {
 func (d *Dispatcher) dispatch(e watcher.Event) {
 	a := NewAlert(e)
 	if err := d.handler.Handle(a); err != nil {
-		if d.logger != nil {
-			d.logger.Printf("alert handler error: %v", err)
-		}
+		d.logf("alert handler error: %v", err)
+	}
+}
+
+// logf writes a formatted log message if the dispatcher has a logger configured.
+func (d *Dispatcher) logf(format string, args ...any) {
+	if d.logger != nil {
+		d.logger.Printf(format, args...)
 	}
 }
