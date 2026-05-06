@@ -1,23 +1,33 @@
-# DriftWatch example configuration
-# Copy this file to driftwatch.yaml and adjust as needed.
+# driftwatch example configuration
+# Copy to /etc/driftwatch/driftwatch.yaml and adjust as needed.
 
-# Directories and files to monitor for unexpected changes.
+# Directories or files to monitor for unexpected changes.
 watch_targets:
-  - /etc/myapp
-  - /etc/nginx/nginx.conf
+  - /etc/nginx
+  - /etc/app/config.yaml
+  - /etc/ssl/certs
 
-# How often to poll watched paths for changes (e.g. 30s, 1m, 5m).
+# How often to poll for changes (e.g. 10s, 1m).
 poll_interval: 30s
 
-# Logging alert handler — always enabled.
+# Minimum severity to trigger alerts: info | warning | critical
+min_severity: warning
+
+# Log alerts to stdout (always enabled).
 log:
-  level: info        # debug | info | warn | error
+  enabled: true
 
-# Webhook alert handler (optional).
-# webhook:
-#   url: https://hooks.example.com/driftwatch
-#   timeout: 10s
+# Send alerts to a generic webhook endpoint.
+webhook:
+  enabled: false
+  url: https://example.com/hooks/driftwatch
 
-# Slack incoming webhook alert handler (optional).
-# slack:
-#   webhook_url: https://hooks.slack.com/services/T000/B000/xxxx
+# Send alerts to a Slack incoming webhook.
+slack:
+  enabled: false
+  webhook_url: https://hooks.slack.com/services/XXX/YYY/ZZZ
+
+# Send alerts to PagerDuty via Events API v2.
+pagerduty:
+  enabled: false
+  integration_key: your-pagerduty-integration-key-here
