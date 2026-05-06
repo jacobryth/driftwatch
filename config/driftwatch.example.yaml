@@ -1,26 +1,23 @@
-# driftwatch example configuration
+# DriftWatch example configuration
+# Copy this file to driftwatch.yaml and adjust as needed.
 
-# How often to poll watched paths for changes.
+# Directories and files to monitor for unexpected changes.
+watch_targets:
+  - /etc/myapp
+  - /etc/nginx/nginx.conf
+
+# How often to poll watched paths for changes (e.g. 30s, 1m, 5m).
 poll_interval: 30s
 
-# Log verbosity: debug | info | warn | error
-log_level: info
+# Logging alert handler — always enabled.
+log:
+  level: info        # debug | info | warn | error
 
-# One or more targets to monitor.
-watch_targets:
-  - path: /etc/nginx
-    glob: "*.conf"
-    recursive: true
-    exclude:
-      - "/etc/nginx/cache"
+# Webhook alert handler (optional).
+# webhook:
+#   url: https://hooks.example.com/driftwatch
+#   timeout: 10s
 
-  - path: /etc/app
-    glob: "*.yaml"
-    recursive: false
-
-# Optional webhook alerting.
-webhook:
-  enabled: false
-  endpoint: "https://hooks.example.com/driftwatch"
-  # HTTP timeout for webhook POST requests.
-  timeout: 10s
+# Slack incoming webhook alert handler (optional).
+# slack:
+#   webhook_url: https://hooks.slack.com/services/T000/B000/xxxx
