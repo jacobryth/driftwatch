@@ -91,3 +91,36 @@ func TestPoll_NoEventWhenUnchanged(t *testing.T) {
 		// pass
 	}
 }
+
+func TestPoll_DetectsMultipleFiles(t *testing.T) {
+	dir := t.TempDir()
+	p1 := writeTmp(t, dir, "a.conf", "x=1")
+	p2 := writeTmp(t, dir, "b.conf", "y=2")
+
+	w := watcher.New([]string{p1, p2}, time.Second)
+	if err := w.Snapshot(); err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+
+	// Modify both files.
+	writeTmp(t, dir, "a.conf", "x=changed")
+	writeTmp(t, dir, "b.conf", "y=changed")
+	w.Poll()
+
+	seen := map[string]bool{}
+	for i := 0; i < 2; i++ {
+		select {
+		case ev := <-w.Events:
+			if ev.Kind != watcher.ChangeModified {
+				t.Fatalf("expected modified, got %s", ev.Kind)
+			}
+			seen[ev.Path] = true
+		default:
+			t.Fatalf("expected event %d, got none", i+1)
+		}
+	}
+
+	if !seen[p1] || !seen[p2] {
+		t.Fatalf("did not receive events for all modified files: %v", seen)
+	}
+}
