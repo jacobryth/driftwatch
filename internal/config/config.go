@@ -9,40 +9,68 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// WatchTarget describes a single directory or file to monitor.
-type WatchTarget struct {
-	Path        string   `yaml:"path"`
-	Glob        string   `yaml:"glob"`
-	Exclude     []string `yaml:"exclude"`
-	Recursive   bool     `yaml:"recursive"`
-}
-
-// WebhookConfig holds optional webhook alerting settings.
-type WebhookConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Endpoint string        `yaml:"endpoint"`
-	Timeout  time.Duration `yaml:"timeout"`
-}
-
-// Config is the top-level configuration for driftwatch.
+// Config is the top-level driftwatch configuration.
 type Config struct {
-	PollInterval time.Duration  `yaml:"poll_interval"`
-	LogLevel     string         `yaml:"log_level"`
-	WatchTargets []WatchTarget  `yaml:"watch_targets"`
-	Webhook      WebhookConfig  `yaml:"webhook"`
+	PollInterval time.Duration `yaml:"poll_interval"`
+	LogLevel     string        `yaml:"log_level"`
+	WatchTargets []WatchTarget `yaml:"watch_targets"`
+	Alerts       AlertsConfig  `yaml:"alerts"`
+}
+
+// WatchTarget describes a single file or directory to monitor.
+type WatchTarget struct {
+	Path    string   `yaml:"path"`
+	Ignore  []string `yaml:"ignore"`
+	Recurse bool     `yaml:"recurse"`
+}
+
+// AlertsConfig aggregates all notification back-end settings.
+type AlertsConfig struct {
+	Log       bool              `yaml:"log"`
+	Webhook   WebhookConfig     `yaml:"webhook"`
+	Slack     SlackConfig       `yaml:"slack"`
+	PagerDuty PagerDutyConfig   `yaml:"pagerduty"`
+	Email     EmailAlertConfig  `yaml:"email"`
+}
+
+// WebhookConfig holds generic webhook settings.
+type WebhookConfig struct {
+	URL     string `yaml:"url"`
+	Enabled bool   `yaml:"enabled"`
+}
+
+// SlackConfig holds Slack webhook settings.
+type SlackConfig struct {
+	WebhookURL string `yaml:"webhook_url"`
+	Enabled    bool   `yaml:"enabled"`
+}
+
+// PagerDutyConfig holds PagerDuty routing-key settings.
+type PagerDutyConfig struct {
+	RoutingKey string `yaml:"routing_key"`
+	Enabled    bool   `yaml:"enabled"`
+}
+
+// EmailAlertConfig mirrors alert.EmailConfig plus an Enabled flag.
+type EmailAlertConfig struct {
+	Enabled  bool     `yaml:"enabled"`
+	Host     string   `yaml:"host"`
+	Port     int      `yaml:"port"`
+	Username string   `yaml:"username"`
+	Password string   `yaml:"password"`
+	From     string   `yaml:"from"`
+	To       []string `yaml:"to"`
 }
 
 func defaults() Config {
 	return Config{
 		PollInterval: 30 * time.Second,
 		LogLevel:     "info",
-		Webhook: WebhookConfig{
-			Timeout: 10 * time.Second,
-		},
+		Alerts:       AlertsConfig{Log: true},
 	}
 }
 
-// Load reads a YAML config file from path and applies defaults.
+// Load reads and validates a YAML config file at path.
 func Load(path string) (*Config, error) {
 	cfg := defaults()
 
@@ -51,23 +79,19 @@ func Load(path string) (*Config, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("config file not found: %s", path)
 		}
-		return nil, fmt.Errorf("read config: %w", err)
+		return nil, fmt.Errorf("reading config: %w", err)
 	}
 
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse config: %w", err)
+		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
 	if len(cfg.WatchTargets) == 0 {
-		return nil, errors.New("config: at least one watch_target must be defined")
+		return nil, errors.New("config must define at least one watch_target")
 	}
 
-	if cfg.Webhook.Enabled && cfg.Webhook.Endpoint == "" {
-		return nil, errors.New("config: webhook.endpoint must be set when webhook is enabled")
-	}
-
-	if cfg.Webhook.Timeout == 0 {
-		cfg.Webhook.Timeout = 10 * time.Second
+	if cfg.PollInterval <= 0 {
+		return nil, errors.New("poll_interval must be positive")
 	}
 
 	return &cfg, nil
