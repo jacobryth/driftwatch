@@ -1,48 +1,60 @@
 # driftwatch example configuration
-# Copy to driftwatch.yaml and adjust for your environment.
+# Copy to /etc/driftwatch/driftwatch.yaml and adjust as needed.
 
-# How often to poll watched paths for changes.
+# poll_interval controls how often watched paths are checked for changes.
 poll_interval: 30s
 
-# Logging verbosity: debug | info | warn | error
+# snapshot_file is where driftwatch persists file state across restarts.
+snapshot_file: /var/lib/driftwatch/snapshot.json
+
+# log_level sets the minimum log level: debug, info, warn, error.
 log_level: info
 
-# Paths to monitor. At least one entry is required.
+# watch_targets lists the files and directories to monitor.
 watch_targets:
-  - path: /etc/nginx
-    recurse: true
-    ignore:
-      - "*.swp"
-      - "*.bak"
-  - path: /etc/ssh/sshd_config
-    recurse: false
+  - path: /etc/nginx/nginx.conf
+    recursive: false
+  - path: /etc/app
+    recursive: true
 
-alerts:
-  # Always emit structured log lines (recommended to keep enabled).
+# alert configures where drift events are sent.
+alert:
+  # log handler is always active; no extra config required.
   log: true
 
-  # Generic JSON webhook (e.g. custom endpoint or Alertmanager).
+  # webhook sends a JSON POST for every event.
   webhook:
     enabled: false
     url: https://hooks.example.com/driftwatch
 
-  # Slack incoming webhook.
+  # slack sends a formatted message to a Slack incoming webhook URL.
   slack:
     enabled: false
-    webhook_url: https://hooks.slack.com/services/XXX/YYY/ZZZ
+    url: https://hooks.slack.com/services/XXX/YYY/ZZZ
 
-  # PagerDuty Events API v2.
+  # pagerduty creates an incident via the Events API v2.
   pagerduty:
     enabled: false
-    routing_key: YOUR_PAGERDUTY_ROUTING_KEY
+    routing_key: your-pagerduty-routing-key
 
-  # SMTP email alerts.
+  # email sends alert messages via SMTP.
   email:
     enabled: false
-    host: smtp.example.com
-    port: 587
-    username: alerts@example.com
-    password: ""
-    from: alerts@example.com
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    username: driftwatch@example.com
+    password: secret
+    from: driftwatch@example.com
     to:
       - ops@example.com
+
+  # rate_limit caps the number of alerts forwarded per window.
+  rate_limit:
+    enabled: true
+    max: 10
+    window: 1m
+
+  # dedupe suppresses repeated alerts for the same file within the TTL.
+  dedupe:
+    enabled: true
+    ttl: 5m
