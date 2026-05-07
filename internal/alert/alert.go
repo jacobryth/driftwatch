@@ -2,82 +2,83 @@ package alert
 
 import (
 	"fmt"
-	"io"
-	"os"
+	"log"
 	"time"
-
-	"github.com/example/driftwatch/internal/watcher"
 )
 
-// Severity represents the urgency level of a drift alert.
+// EventKind describes what happened to a watched file.
+type EventKind int
+
+const (
+	EventModified EventKind = iota
+	EventDeleted
+	EventCreated
+)
+
+func (k EventKind) String() string {
+	switch k {
+	case EventModified:
+		return "modified"
+	case EventDeleted:
+		return "deleted"
+	case EventCreated:
+		return "created"
+	default:
+		return "unknown"
+	}
+}
+
+// Severity indicates how urgent an alert is.
 type Severity string
 
 const (
-	SeverityInfo     Severity = "INFO"
-	SeverityWarning  Severity = "WARNING"
-	SeverityCritical Severity = "CRITICAL"
+	SeverityWarning  Severity = "warning"
+	SeverityCritical Severity = "critical"
 )
 
-// Alert represents a single drift detection event.
-type Alert struct {
-	Timestamp time.Time
-	Event     watcher.Event
+// Event carries information about a single drift detection.
+type Event struct {
+	Path      string
+	Kind      EventKind
 	Severity  Severity
+	Timestamp time.Time
 	Message   string
 }
 
-// Handler defines the interface for processing alerts.
+// Handler is implemented by any alert destination.
 type Handler interface {
-	Handle(a Alert) error
+	Handle(Event) error
 }
 
-// severityFor maps event kinds to severity levels.
-func severityFor(e watcher.Event) Severity {
-	switch e.Kind {
-	case watcher.EventDeleted:
+// severityFor maps event kinds to severities.
+func severityFor(k EventKind) Severity {
+	if k == EventDeleted {
 		return SeverityCritical
-	case watcher.EventModified:
-		return SeverityWarning
-	case watcher.EventCreated:
-		return SeverityInfo
-	default:
-		return SeverityInfo
 	}
+	return SeverityWarning
 }
 
-// NewAlert constructs an Alert from a watcher event.
-func NewAlert(e watcher.Event) Alert {
-	sev := severityFor(e)
-	msg := fmt.Sprintf("[%s] %s: %s", sev, e.Kind, e.Path)
-	return Alert{
-		Timestamp: time.Now().UTC(),
-		Event:     e,
+// NewAlert constructs an Event with sensible defaults.
+func NewAlert(path string, kind EventKind) Event {
+	sev := severityFor(kind)
+	return Event{
+		Path:      path,
+		Kind:      kind,
 		Severity:  sev,
-		Message:   msg,
+		Timestamp: time.Now().UTC(),
+		Message:   fmt.Sprintf("file %s: %s", path, kind),
 	}
 }
 
-// LogHandler writes alerts as structured lines to a writer.
-type LogHandler struct {
-	out io.Writer
+// logHandler writes alerts to the standard logger.
+type logHandler struct{ logger *log.Logger }
+
+// NewLogHandler returns a Handler that logs each event.
+func NewLogHandler(logger *log.Logger) Handler {
+	return &logHandler{logger: logger}
 }
 
-// NewLogHandler creates a LogHandler writing to w.
-// If w is nil, os.Stderr is used.
-func NewLogHandler(w io.Writer) *LogHandler {
-	if w == nil {
-		w = os.Stderr
-	}
-	return &LogHandler{out: w}
-}
-
-// Handle writes the alert to the underlying writer.
-func (h *LogHandler) Handle(a Alert) error {
-	_, err := fmt.Fprintf(h.out, "time=%s severity=%s kind=%s path=%q\n",
-		a.Timestamp.Format(time.RFC3339),
-		a.Severity,
-		a.Event.Kind,
-		a.Event.Path,
-	)
-	return err
+func (h *logHandler) Handle(e Event) error {
+	h.logger.Printf("[%s] %s", e.Severity, e.Message)
+	return nil
 }
