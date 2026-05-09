@@ -1,83 +1,70 @@
 # driftwatch example configuration
-# Copy to driftwatch.yaml and adjust for your environment.
+# Copy this file to /etc/driftwatch/driftwatch.yaml and adjust as needed.
 
-# poll_interval controls how often watched paths are checked.
+# poll_interval controls how often watched paths are checked for changes.
 poll_interval: 30s
 
-# log_level sets the minimum log level: debug, info, warn, error.
+# watch_targets is the list of files or directories to monitor.
+watch_targets:
+  - /etc/nginx/nginx.conf
+  - /etc/ssh/sshd_config
+  - /etc/cron.d
+
+# log_level sets the minimum log level (debug, info, warn, error).
 log_level: info
 
-# watch defines the list of files or directories to monitor.
-watch:
-  - path: /etc/nginx
-    recursive: true
-  - path: /etc/ssh/sshd_config
-    recursive: false
-  - path: /etc/cron.d
-    recursive: false
-
-# alerts configures one or more notification channels.
 alerts:
-  # Log to stdout (always available).
-  log:
-    enabled: true
-
-  # HTTP webhook — POST JSON payload to a URL.
+  # Webhook alert — POST JSON payload to the given URL.
   webhook:
     enabled: false
-    url: "https://hooks.example.com/driftwatch"
+    url: https://hooks.example.com/driftwatch
 
-  # Slack incoming webhook.
+  # Slack alert — send a formatted message to a Slack incoming webhook.
   slack:
     enabled: false
-    webhook_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
-    channel: "#ops-alerts"
-    username: "driftwatch"
+    webhook_url: https://hooks.slack.com/services/XXX/YYY/ZZZ
 
-  # PagerDuty Events API v2.
+  # PagerDuty alert — create an incident via Events API v2.
   pagerduty:
     enabled: false
-    routing_key: "your-pagerduty-routing-key"
+    routing_key: your-pagerduty-routing-key
 
-  # Email via SMTP.
+  # Email alert — send via SMTP.
   email:
     enabled: false
-    smtp_host: "smtp.example.com"
+    smtp_host: smtp.example.com
     smtp_port: 587
-    username: "alerts@example.com"
-    password: "s3cr3t"
-    from: "driftwatch@example.com"
+    username: alerts@example.com
+    password: secret
+    from: alerts@example.com
     to:
-      - "ops@example.com"
+      - ops@example.com
 
-# pipeline configures middleware applied to every alert before delivery.
-pipeline:
-  # dedupe suppresses duplicate events for the same path within ttl.
-  dedupe:
-    enabled: true
-    ttl: 5m
+# Circuit breaker — prevent alert storms when a downstream handler is unhealthy.
+circuit_breaker:
+  enabled: true
+  # Number of consecutive failures before the circuit opens.
+  threshold: 5
+  # How long to wait before attempting a probe after the circuit opens.
+  cooldown: 2m
 
-  # throttle allows at most max_events per path within window.
-  throttle:
-    enabled: true
-    max_events: 5
-    window: 1m
+# Rate limiting — cap the total number of alerts per window.
+rate_limit:
+  enabled: true
+  max: 20
+  window: 1m
 
-  # rate_limit caps total events across all paths within window.
-  rate_limit:
-    enabled: false
-    max_events: 100
-    window: 1m
+# Deduplication — suppress repeated alerts for the same path within a TTL.
+dedupe:
+  enabled: true
+  ttl: 5m
 
-  # retry retries failed handler deliveries.
-  retry:
-    enabled: true
-    max_attempts: 3
-    delay: 2s
+# Throttle — minimum gap between alerts for the same path.
+throttle:
+  enabled: false
+  window: 30s
 
-  # filter restricts alerts to paths matching any of the given glob patterns.
-  filter:
-    enabled: false
-    patterns:
-      - "*.conf"
-      - "*.yaml"
+# Filter — only alert on paths matching these glob patterns.
+# An empty list forwards all events.
+filter:
+  patterns: []
