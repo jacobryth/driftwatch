@@ -89,6 +89,21 @@ func (w *Watcher) Poll() {
 	}
 }
 
+// Run starts a blocking loop that calls Poll on every Interval tick.
+// It returns when the provided done channel is closed.
+func (w *Watcher) Run(done <-chan struct{}) {
+	ticker := time.NewTicker(w.Interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			w.Poll()
+		case <-done:
+			return
+		}
+	}
+}
+
 func statFile(path string) (*FileState, error) {
 	f, err := os.Open(path)
 	if err != nil {
